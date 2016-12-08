@@ -1,0 +1,5 @@
+MIME::Base64,,cpan,Required
+LWP::UserAgent,>=6.15,cpan,Required for OAuth 2 Server Flow
+Crypt::JWT,>=0.010,cpan,Required for JWT signature verification
+Crypt::Random,,cpan,Required for cryptographically secure nonces
+JSON,,cpan,Required 
