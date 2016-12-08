@@ -1,5 +1,5 @@
-# ---+ Extensions
-# ---++ OpenIDLoginContrib
+# ---+ Security and Authentication
+# ---++ Open ID
 # ---+++ Provider Details
 # **URL LABEL="OpenID Connect Configuration URL"**
 # An URL that points to the OpenID Connect discovery document.

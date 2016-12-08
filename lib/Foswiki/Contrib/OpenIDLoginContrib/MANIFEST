@@ -10,4 +10,5 @@ data/System/OpenIDLoginContrib.txt 0644 Documentation page
 lib/Foswiki/Contrib/OpenIDLoginContrib.pm  Perl module 
 lib/Foswiki/Contrib/OpenIDLoginContrib/Config.spec 0444 Configuration
 lib/Foswiki/Contrib/OpenIDLoginContrib/OpenIDConnect.pm  Perl module
+lib/Foswiki/Contrib/OpenIDLoginContrib/DEPENDENCIES 0664
 lib/Foswiki/LoginManager/OpenIDConnectLogin.pm  Perl module

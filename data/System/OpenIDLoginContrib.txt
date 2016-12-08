@@ -1,26 +1,124 @@
+%META:TOPICINFO{author="ProjectContributor" comment="" date="1481239641" format="1.1" reprev="2" version="2"}%
 %META:TOPICPARENT{name="Contribs"}%
 <!--
 One line description, required for extensions repository catalog.
-   * Set SHORTDESCRIPTION = %$SHORTDESCRIPTION%
+   * Set SHORTDESCRIPTION = Enables Authentication via OpenID Connect
 -->
----+!! Empty Contrib
+---+!! Open ID Login 
 
-%SHORTDESCRIPTION%
+%FORMFIELD{"Description"}%
 
 %TOC%
 
 ---++ Installation
-%$INSTALL_INSTRUCTIONS%
+You do not need to install anything in the browser to use this extension. The following instructions are for the administrator who installs the extension on the server.
+
+Open configure, and open the "Extensions" section. Use "Find More Extensions" to get a list of available extensions. Select "Install".
+
+If you have any problems, or if the extension isn't available in =configure=, then you can still install manually from the command-line. See http://foswiki.org/Support/ManuallyInstallingExtensions for more help.
+
+---++ Configuration
+
+Configuration of Open ID Authentication for your Foswiki site requires a substantial amount of work, knowledge about Foswiki's configuration files and at least a passing understanding of it's templating system.
+
+Before you begin, make sure you have registered a new application/client (the terminology differs from provider to provider) with at least one Open ID Connect provider (if you don't know how, check out the reference links at the bottom of the page). You also need access to your Foswiki installation's templates folder, as you'll have to edit the login template to suit your needs.
+
+---+++ Required information
+
+You need the following information before you can continue:
+   1. Your Application/Client ID
+   1. Your Application/Client Secret
+   1. The Open ID discovery/configuration document URL. The URL should end in '/.well_known/openid-configuration'. If you open this URL, you should
+      see a JSON document listing various oauth api endpoint URLs.
+   1. The issuer string. This is usually an URI and you can find it in the discovery/configuration document under the 'iss' key.
+   1. You also need to know the full URL to your Foswiki installation's login script. This is the _redirect_ or _callback_ URL that you need to
+      provide when registering a new application/client with your Open ID provider.
+
+If you want your users to be able to authenticate using multiple Open ID providers, make sure you have the information for points one through four
+for each of them.
+
+The information for the first Open ID Provider can be entered using Foswiki's web-based configuration tool ([[%SCRIPTURLPATH{"configure"}%]]). Any additional
+providers must be added to the Localsite.cfg configuration file manually.
+
+---+++ Open ID Login and the Foswiki authentication infrastructure
+
+In order to enable Open ID authentication, you need to switch Foswiki's !LoginManager from whatever solution you're currently using over to Foswiki::LoginManager::OpenIDConnectLogin. If you were previously using an authentication scheme that made use of !TemplateLogin, chances are you will be able to keep it working in parallel with Open ID authentication.
+
+The !OpenIDConnectLogin manager obviously doesn't require a password backend. Currently, it also doesn't provide it's own user mapper. I suggest you use !TopicUserMapping in order to get a stable mapping from a third-party account to a WikiName, but this isn't required for authentication.
+
+Not having our own user mapper has it's downsides. For example, if you have accounts with multiple Open ID providers, it is currently not possible to explicitely link these accounts in Foswiki. You may still manage to map both accounts to the same WikiName, though.
+
+---+++ Adjusting the openid login template
+
+If you have multiple providers that may authenticate your users, you must give the user a choice of provider. This choice replaces the login dialog; so instead of a form with username and password fields, the login dialog under Open ID Connect Login consists of a number of icons, each representing an Open ID Connect provider. So your login dialog may look like this:
+
+<img src="%ATTACHURL%/patternskin_openid_login_screenshot.png">
+
+In fact, this is exactly what you get to see if you have Foswiki's Pattern skin installed. However, the choice between the these two providers is most likely not what you need. Currently, there is no way around manually fixing the =openidlogin= template. The pattern skin template is provided as an example on how to make your own =openidlogin= templates. Adjusting the list of providers is a fairly simple task and can be reduced to editing the following section of =openidlogin.pattern.tmpl=:
+
+<verbatim>
+%TMPL:DEF{"openidstep"}%
+%TMPL:P{"openidbutton" PROVIDER="Default" PROVIDERNAME="Microsoft" LOGOIMAGE="windows_logo.png"}%
+%TMPL:P{"openidbutton" PROVIDER="Google" PROVIDERNAME="Google" LOGOIMAGE="google_g_logo.png"}%
+%TMPL:END%
+</verbatim>
+
+The =PROVIDER= parameter references the key you use in =LocalSite.cfg=. The =LOGOIMAGE= references an image which you should attach to *this* topic. Add or remove lines as needed; one for each provider.
+
+If you are not happy with the default look of the icons or the whole login template, you can also edit the =openidlogin.css= file, which is also attached to *this* topic.
+
+Clicking on the "I don't use any of those" link will allow users to authenticate using the default !TemplateLogin. If you do not wish to offer native authentication, remove the link from the template. This won't disable the functionality, but hide it from the users. 
+
+---++ Nice to know
+
+---+++ Bypassing Open ID and falling back to standard !TemplateLogin
+
+Open ID Authentication captures the Foswiki login script, but it can be made to yield to template-based password authentication. Call [[%SCRIPTURLPATH{"login"}%?provider=native]] to see it in action.
+
+This can also come in handy when you've messed up your openidlogin template and can't use it to access the standard template login any more.
+
+---+++ Providing a direct link to a specific Open ID provider
+
+You can provide a direct link to any of the configured Open ID login dialogs by using the =provider= parameter of the login script:
+[[%SCRIPTURLPATH{"login"}%?provider=Default]] will send you off to authenticate with the default provider.
+
+---++ Bugs, Shortcomings, Future work
+
+   1. Currently, there is no way to permanently log off. Destroying the Foswiki session isn't enough, because someone with access to the browser can simply re-authenticate without needing to enter a password. This is a hard problem. Several Open ID providers offer solutions for this in the form of a logout endpoint, but this functionality hasn't been implemented yet.
+   2. We also don't do any registration of new users. An Open ID token doesn't yield much information, but we can get at least the given name, family name and e-mail address out of an ID token.
+
+---++ Important files
+
+There are several places where you can tweak the configuration of Open ID Connect Login:
+
+| =/templates/openidlogin.*.tmpl= | The template that will be used to render the login page. |
+| =/pub/System/OpenIDLoginContrib/openidlogin.css= | contains css to format the =openidlogin= template |
+| =/pub/System/OpenIDLoginContrib/openidlogin.js= | contains javascript for the login page |
+
+Please note that these files, especially your templates which aren't under version control, may be overwritten when you update OpenIDLoginContrib.
+
+---++ Internals
+
+We're using an oauth flow that gets us access and refresh tokens besides the id token we're actually interested in. Currently we don't do anything with
+either the access or the refresh token, but if anyone wanted to write other oauth-based extensions (how about an extension that lets users pick attachments not just from their local computer but also from their Google drives, Dropbox accounts etc), it would be a simple matter to store the access token in the session in order to make it available to other extensions.
+
+---++ References
+   * Google Open ID Connect: https://developers.google.com/identity/protocols/OpenIDConnect
+   * Microsoft Open ID Connect: https://docs.microsoft.com/en-us/azure/active-directory/active-directory-protocols-openid-connect-code
 
 ---++ Info
 
-|  Author: | PascalSchuppli |
-|  Copyright: | &copy; %$CREATEDYEAR%, PascalSchuppli, All Rights Reserved |
-|  License: | GPL ([[http://www.gnu.org/copyleft/gpl.html][GNU General Public License]]) |
-|  Dependencies: | %$DEPENDENCIES% |
-|  Version: | %$VERSION% |
-|  Release: | %$RELEASE% |
+|  Dependencies: | <table border="1" class="foswikiTable"><tr><th>Name</th><th>Version</th><th>Description</th></tr><tr><td align="left">MIME::Base64</td><td align="left"></td><td align="left">Required</td></tr><tr><td align="left">LWP::UserAgent</td><td align="left">&gt;=6.15</td><td align="left">Required for OAuth 2 Server Flow</td></tr><tr><td align="left">Crypt::JWT</td><td align="left">&gt;=0.010</td><td align="left">Required for JWT signature verification</td></tr><tr><td align="left">Crypt::Random</td><td align="left"></td><td align="left">Required for cryptographically secure nonces</td></tr><tr><td align="left">JSON</td><td align="left"></td><td align="left">Required </td></tr></table> |
 |  Change History: | <!-- versions below in reverse order -->&nbsp; |
 |  1.0.0 (XX Mmm 20XX): | Initial version |
-|  Home: | http://foswiki.org/Extensions/%TOPIC% |
-|  Support: | http://foswiki.org/Support/%TOPIC% |
+
+%META:FORM{name="PackageForm"}%
+%META:FIELD{name="Author" title="Author" value="PascalSchuppli"}%
+%META:FIELD{name="Version" title="Version" value="1.00"}%
+%META:FIELD{name="Release" title="Release" value="08 Dec 2016"}%
+%META:FIELD{name="Description" title="Description" value="Enables Authentication via !OpenID Connect"}%
+%META:FIELD{name="Repository" title="Repository" value="https://github.com/foswiki/OpenIDLoginContrib"}%
+%META:FIELD{name="Copyright" title="Copyright" value="&copy; %25$CREATEDYEAR%25, PascalSchuppli, All Rights Reserved"}%
+%META:FIELD{name="License" title="License" value="GPL ([[http://www.gnu.org/copyleft/gpl.html][GNU General Public License]])"}%
+%META:FIELD{name="Home" title="Home" value="http://foswiki.org/Extensions/%25TOPIC%25"}%
+%META:FIELD{name="Support" title="Support" value="http://foswiki.org/Support/%25TOPIC%25"}%

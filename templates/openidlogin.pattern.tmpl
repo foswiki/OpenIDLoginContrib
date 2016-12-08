@@ -30,15 +30,13 @@
 %TMPL:END%
 
 %TMPL:DEF{"openidstep"}%
-<div class="openid_accounts"><hr/>
-%TMPL:P{"openidbutton" PROVIDER="MSAzure" PROVIDERNAME="Microsoft" LOGOIMAGE="windows_logo.png"}%
+%TMPL:P{"openidbutton" PROVIDER="Default" PROVIDERNAME="Microsoft" LOGOIMAGE="windows_logo.png"}%
 %TMPL:P{"openidbutton" PROVIDER="Google" PROVIDERNAME="Google" LOGOIMAGE="google_g_logo.png"}%
-</div>
 %TMPL:END%
 
 %TMPL:DEF{"form"}%<div id="foswikiLogin">
 %TMPL:P{"formstart"}%<div class="foswikiFormSteps">%TMPL:P{"titlestep"}%
-%TMPL:P{"openidstep"}%<p class="clear"><a class='foswikiUnvisited native_toggle' href="#?provider=native">%MAKETEXT{"I don't use any of those."}%</a></p>
+<div class="openid_accounts"><hr/>%TMPL:P{"openidstep"}%</div><p class="clear"><a class='foswikiUnvisited native_toggle' href="#?provider=native">%MAKETEXT{"I don't use any of those."}%</a></p>
 <div class="native_credentials">
 <hr />
 %TMPL:P{"usernamestep"}%%TMPL:P{"passwordstep"}%%TMPL:P{"submitstep"}%
