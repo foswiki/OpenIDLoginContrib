@@ -1,0 +1,16 @@
+%TMPL:INCLUDE{"page"}%<!-- template: openidlogin.nat.tmpl -->
+%TMPL:INCLUDE{"openidloginbase.tmpl"}%
+%TMPL:INCLUDE{"login"}%
+
+%TMPL:DEF{"LOG_IN_BANNER"}%%MAKETEXT{"Welcome, please login"}%.%TMPL:END%
+
+%TMPL:DEF{"message"}%<!-- -->
+<div class="foswikiFormSteps">
+%NOTE%<!-- -->
+%TMPL:P{"openidstep"}%<div class="native_credentials">
+%TMPL:P{"login"}%<!-- -->
+%TMPL:P{"seealso"}%<!-- -->
+</div></div>
+%TMPL:P{"poweredby"}%<!-- -->
+%TMPL:P{"openid_javascript"}%
+<!-- -->%TMPL:END%

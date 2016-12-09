@@ -1,0 +1,25 @@
+%TMPL:DEF{"openidbutton"}%
+<a class="openidbutton provider_%PROVIDERNAME%" href="%SCRIPTURLPATH{"login"}%?provider=%PROVIDER%">
+   <img src="%PUBURLPATH%/%SYSTEMWEB%/OpenIDLoginContrib/%LOGOIMAGE%">
+   <span>%PROVIDERNAME%</span>
+</a>
+%TMPL:END%
+
+%TMPL:DEF{"openidstep"}%
+<div class="openid_accounts foswikiFormStep">%TMPL:P{"openid_providers"}%</div>
+%TMPL:P{"openid_toggle"}%
+%TMPL:END%
+
+%TMPL:DEF{"openid_toggle"}%
+<p class="foswikiFormStep clear openid_accounts"><a class='foswikiUnvisited native_toggle' href="?provider=native">%MAKETEXT{"I don't use any of those."}%</a></p>
+%TMPL:END%
+
+%TMPL:DEF{"openid_javascript"}%
+<script src="%PUBURLPATH%/%SYSTEMWEB%/OpenIDLoginContrib/openidlogin.js"></script>
+%TMPL:END%
+
+%{################################################################################# }%
+%TMPL:DEF{"openid_providers"}%
+%TMPL:P{"openidbutton" PROVIDER="Default" PROVIDERNAME="Microsoft" LOGOIMAGE="windows_logo.png"}%
+%TMPL:P{"openidbutton" PROVIDER="Google" PROVIDERNAME="Google" LOGOIMAGE="google_g_logo.png"}%
+%TMPL:END%

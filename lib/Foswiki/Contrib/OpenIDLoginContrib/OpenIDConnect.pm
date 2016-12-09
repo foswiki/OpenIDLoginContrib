@@ -6,7 +6,7 @@ use JSON;
 
 package Foswiki::Contrib::OpenIDLoginContrib::OpenIDConnect;
 use Exporter 'import';
-@EXPORT_OK = qw(endpoint_discovery get_auth_endpoint get_token_endpoint exchange_code_for_id_token random_bytes);
+@EXPORT_OK = qw(endpoint_discovery get_auth_endpoint get_token_endpoint get_supported_scopes exchange_code_for_id_token random_bytes);
 
 sub endpoint_discovery {
     my $discovery_uri = shift;
@@ -25,6 +25,11 @@ sub get_token_endpoint {
     my $endpoints = shift;
     return $endpoints->{'token_endpoint'};
 }
+
+sub get_supported_scopes {
+    my $endpoints = shift;
+    return $endpoints->{'scopes_supported'};
+}   
 
 sub retrieve_public_keys {
     my $discovery = shift;

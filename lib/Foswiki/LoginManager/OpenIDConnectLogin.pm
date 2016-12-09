@@ -32,7 +32,7 @@ use Foswiki::Sandbox ();
 use LWP::UserAgent;
 use JSON;
 
-use Foswiki::Contrib::OpenIDLoginContrib::OpenIDConnect qw(endpoint_discovery get_auth_endpoint exchange_code_for_id_token random_bytes);
+use Foswiki::Contrib::OpenIDLoginContrib::OpenIDConnect qw(endpoint_discovery get_auth_endpoint get_supported_scopes exchange_code_for_id_token random_bytes);
 
 @Foswiki::LoginManager::OpenIDConnectLogin::ISA = qw( Foswiki::LoginManager::TemplateLogin );
 
@@ -67,7 +67,7 @@ sub loadProviderData {
     $this->{endpoints} = endpoint_discovery($discovery_uri);
     $this->{client_id} = $Foswiki::cfg{'Extensions'}{'OpenID'}{$provider}{'ClientID'};
     $this->{client_secret} = $Foswiki::cfg{'Extensions'}{'OpenID'}{$provider}{'ClientSecret'};
-    $this->{issuer} = $Foswiki::cfg{'Extensions'}{'OpenID'}{$provider}{'IssuerRegex'} || $this->{endpoints}->{'issuer'};
+    $this->{issuer} = $Foswiki::cfg{'Extensions'}{'OpenID'}{$provider}{'IssuerRegex'};
     $this->{redirect_uri} = $Foswiki::cfg{'Extensions'}{'OpenID'}{$provider}{'RedirectURL'};
     $this->{loginname_attr} = $Foswiki::cfg{'Extensions'}{'OpenID'}{$provider}{'LoginnameAttribute'};
     $this->{wikiname_attrs} = $Foswiki::cfg{'Extensions'}{'OpenID'}{$provider}{'WikiNameAttributes'};   
@@ -120,10 +120,15 @@ sub build_auth_request {
     my $origin = shift;
 
     my $endpoint = get_auth_endpoint($this->{endpoints});
+    my %supported_scopes = map { $_ => 1 } @{get_supported_scopes($this->{endpoints}) };
+    my $scopes = "openid";
+    $scopes .= " email" if exists($supported_scopes{"email"});
+    $scopes .= " profile" if exists($supported_scopes{"profile"});
+    
     my $params = {
 	client_id => $this->{client_id},
 	response_type => "code",
-	scope => "openid email profile",
+	scope => $scopes,
 	redirect_uri => $this->{redirect_uri},
 	state => $this->serializedState($origin)
     };
@@ -149,9 +154,16 @@ sub registerUser {
     my $session = shift;
     my $id_token = shift;
 
-    my $loginname = $this->extractLoginname($id_token);
+    my $loginname = undef;
     # TODO : This is way too simple. Fix it (duplicates, special characters etc)
     my $wikiname = $this->buildWikiName($id_token);
+    
+    if ($Foswiki::cfg{Register}{AllowLoginName}) {
+	$loginname = $this->extractLoginname($id_token);
+    }
+    else {
+	$loginname = $wikiname;
+    }
     
     # Now we try to find/create a permanent mapping between loginname and username
     my $cuid = $session->{users}->getCanonicalUserID($loginname);
