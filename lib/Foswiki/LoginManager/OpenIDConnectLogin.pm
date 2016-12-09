@@ -63,12 +63,12 @@ sub loadProviderData {
     my $provider = shift;
     # TODO: We should cache this. On sites with heavy traffic, this adds needless delays, especially since
     # we need to load it twice for each login
-    my $discovery_uri = $Foswiki::cfg{'Extensions'}{'OpenID'}{$provider}{'DiscoveryURI'};
+    my $discovery_uri = $Foswiki::cfg{'Extensions'}{'OpenID'}{$provider}{'DiscoveryURL'};
     $this->{endpoints} = endpoint_discovery($discovery_uri);
     $this->{client_id} = $Foswiki::cfg{'Extensions'}{'OpenID'}{$provider}{'ClientID'};
     $this->{client_secret} = $Foswiki::cfg{'Extensions'}{'OpenID'}{$provider}{'ClientSecret'};
-    $this->{issuer} = $Foswiki::cfg{'Extensions'}{'OpenID'}{$provider}{'IssuerRegex'};
-    $this->{redirect_uri} = $Foswiki::cfg{'Extensions'}{'OpenID'}{$provider}{'RedirectURI'};
+    $this->{issuer} = $Foswiki::cfg{'Extensions'}{'OpenID'}{$provider}{'IssuerRegex'} || $this->{endpoints}->{'issuer'};
+    $this->{redirect_uri} = $Foswiki::cfg{'Extensions'}{'OpenID'}{$provider}{'RedirectURL'};
     $this->{loginname_attr} = $Foswiki::cfg{'Extensions'}{'OpenID'}{$provider}{'LoginnameAttribute'};
     $this->{wikiname_attrs} = $Foswiki::cfg{'Extensions'}{'OpenID'}{$provider}{'WikiNameAttributes'};   
 }
@@ -194,7 +194,7 @@ sub redirectToProvider {
     my $origin = $query->param('foswiki_origin');
     # Avoid accidental passthrough
     $query->delete( 'foswiki_origin', 'provider' );
-
+    
     $this->loadProviderData($provider);
     
     my $request_uri = $this->build_auth_request($session, $origin);
@@ -342,7 +342,7 @@ sub login {
     my $state = $query->param('state');
     my $code = $query->param('code');
     my $password = $query->param('password');
-
+    
     # The login method now acts as a switchboard. When the provider
     # parameter is provided, we do an oauth redirect to the given
     # provider. When we get state and code parameters, we're running
@@ -352,14 +352,14 @@ sub login {
     # - it provides a way to access the original behaviour of the
     # TemplateLogin.
     
-    if ($provider && ($provider ne 'native')) {
+    if ((defined $provider) && ($provider ne 'native')) {
 	$this->redirectToProvider($provider, $query, $session);
 	return;
     }
     elsif ($state && $code) {
 	$this->oauthCallback($code, $state, $query, $session);
     }
-    elsif ($password || $provider eq 'native') {
+    elsif ($password || ((defined $provider) && ($provider eq 'native'))) {
 	# if we get a password or a request for the native login 
 	# provider, we redirect to the original TemplateLogin
 	$this->SUPER::login($query, $session);

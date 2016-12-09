@@ -12,7 +12,7 @@ sub endpoint_discovery {
     my $discovery_uri = shift;
     my $ua = LWP::UserAgent->new;
     my $response = $ua->get($discovery_uri);
-    die "Could not retrieve Open ID endpoint configuration" if !$response->is_success;
+    die "Could not retrieve Open ID endpoint configuration at $discovery_uri" if !$response->is_success;
     return JSON::decode_json($response->decoded_content);
 }
 
@@ -98,7 +98,7 @@ sub verify_id_token {
 		die "JWT ID token verification failed: " . $@;
 	    };
 	    die "JWT ID token verification failed: wrong audience" unless $audience eq $data->{'aud'};
-	    die "JWT ID token verification failed: wrong issuer" unless $issuer eq $data->{'iss'};
+	    die "JWT ID token verification failed: wrong issuer (" . $data->{'iss'} . ")" unless $data->{'iss'} =~ /$issuer/;
 	    return $data;
 	}
     }
