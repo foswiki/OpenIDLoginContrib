@@ -204,7 +204,7 @@ sub _isAlreadyMapped {
     my $is_mapped = 0;    
     if ($Foswiki::cfg{Register}{AllowLoginName}) {
 	my $aWikiname = Foswiki::Func::userToWikiName($loginname, 1);
-	$is_mapped = ($aWikiname eq $loginname) && (scalar @$users == 0);
+	$is_mapped = $aWikiname ne $loginname;
     } else {
 	# If login names are turned off, both true and false would make
 	# sense, but we return 0 so that on-the-spot user topic matching
@@ -232,7 +232,7 @@ sub mapUser {
     }
     my $email = lc($this->extractEmail($id_token));
     
-    if (!$this->_isAlreadyMapped($session, $loginname, $email, $candidate) {
+    if (!$this->_isAlreadyMapped($session, $loginname, $email, $candidate)) {
 	my $wikiname = undef;
 	my $orig_candidate = $candidate;
 	my $counter = 1;
@@ -259,11 +259,16 @@ sub redirectToProvider {
     my $provider = shift;
     my $query = shift;
     my $session = shift;
-
+    
     my $origin = $query->param('foswiki_origin');
     # Avoid accidental passthrough
     $query->delete( 'foswiki_origin', 'provider' );
-    
+
+    my $topic  = $session->{topicName};
+    my $web    = $session->{webName};
+    my $path_info = $query->path_info();
+    Foswiki::Func::writeDebug("redirect from $web.$topic ($path_info)");
+        
     $this->loadProviderData($provider);
     
     my $request_uri = $this->build_auth_request($session, $origin);
@@ -273,6 +278,8 @@ sub redirectToProvider {
     Foswiki::Func::setSessionValue('openid_state', $stored_state);
     Foswiki::Func::setSessionValue('openid_provider', $provider);
     Foswiki::Func::setSessionValue('openid_origin', $origin);
+    Foswiki::Func::setSessionValue('openid_web', $web);
+    Foswiki::Func::setSessionValue('openid_topic', $topic);
     
     $response->redirect($request_uri);
 }
@@ -292,9 +299,13 @@ sub oauthCallback {
     my $stored_state = Foswiki::Func::getSessionValue('openid_state');
     my $provider = Foswiki::Func::getSessionValue('openid_provider');
     my $origin = Foswiki::Func::getSessionValue('openid_origin');
+    my $web = Foswiki::Func::getSessionValue('openid_web');
+    my $topic = Foswiki::Func::getSessionValue('openid_topic');
     Foswiki::Func::clearSessionValue('openid_state');
     Foswiki::Func::clearSessionValue('openid_provider');
     Foswiki::Func::clearSessionValue('openid_origin');
+    Foswiki::Func::clearSessionValue('openid_web');
+    Foswiki::Func::clearSessionValue('openid_topic');
     die "OpenIDLoginContrib detected state mismatch ('$stored_state' vs '$state') - attack in progress?" unless ($stored_state eq $state);
     $this->{state} = $state;
 
@@ -308,8 +319,6 @@ sub oauthCallback {
 	$code);
 
     my ( $origurl, $origmethod, $origaction ) = Foswiki::LoginManager::TemplateLogin::_unpackRequest($origin);
-    my $topic = $session->{topicName};
-    my $web = $session->{webName};    
     
     my $loginName = $this->extractLoginname($id_token);
     my $hrReadable = $id_token->{'given_name'} . $id_token->{'family_name'};
@@ -355,7 +364,7 @@ sub displayLoginTemplate {
     my $this = shift;
     my $query = shift;
     my $session = shift;
-
+    
     my $users = $session->{users};
     my $loginTemplate = "openidlogin";
     # SMELL: This is ugly; should be done in a template, but the only way I can see
