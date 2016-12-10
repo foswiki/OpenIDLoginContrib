@@ -1,9 +1,11 @@
 # ---+ Security and Authentication
 # ---++ Open ID
+# Configure Open ID Login here. Remember to select the OpenIDConnectLogin login manager under the Login tab to enable it. You're also strongly urged to enable 'AllowLoginName' (found under the Registration tab).
 # ---+++ Provider Details
+# Set up your first Open ID provider here. You can configure additional providers directly in LocalSite.cfg.
 # **URL LABEL="OpenID Connect Configuration URL"**
 # An URL that points to the OpenID Connect discovery document.
-# It should end in /.well-known/openid-configuration.
+# It usually ends in /.well-known/openid-configuration.
 $Foswiki::cfg{Extensions}{OpenID}{Default}{DiscoveryURL} = '';
 # **URL LABEL="Redirect/OAuth Callback URL"**
 # The callback URL that the OpenID provider redirects to. This
@@ -27,6 +29,7 @@ $Foswiki::cfg{Extensions}{OpenID}{Default}{ClientSecret} = '';
 # the format to expect.
 $Foswiki::cfg{Extensions}{OpenID}{Default}{IssuerRegex} = '';
 # ---+++ Users
+# Configure how ID tokens are mapped onto the Foswiki loginname/WikiName infrastructure.
 # **STRING LABEL="WikiName Claims"**
 # Comma-separated ID token claims which should make up the WikiName.
 # The default should give good results, but depending on the provider, you might want
