@@ -130,7 +130,8 @@ sub build_auth_request {
 	response_type => "code",
 	scope => $scopes,
 	redirect_uri => $this->{redirect_uri},
-	state => $this->serializedState($origin)
+	state => $this->serializedState($origin),
+	nonce => 'something_fix_me'
     };
     my $query = $this->urlencode_hash($session, $params);
     return $endpoint . "?" . $query;
@@ -145,56 +146,112 @@ sub buildWikiName {
 	$wikiname .= $idtoken->{$attr}
     }
     # some minimal normalization
-    $wikiname = s/\s+//g;
+    $wikiname =~ s/\s+//g;
+
+    # Forbidden wikinames get mapped to the WikiGuest name
+    my @forbidden = split(/\s+,\s+/, $Foswiki::cfg{Extensions}{OpenID}{ForbiddenWikinames});
+    for my $bignono (@forbidden) {
+	if ($wikiname eq $bignono) {
+	    return $Foswiki::cfg{DefaultUserWikiName};
+	}
+    }
     return $wikiname;
 }
 
-sub registerUser {
+sub matchWikiUser {
+    my $this = shift;
+    my $wikiname = shift;
+    my $email = shift;
+
+    my $web = $Foswiki::cfg{'UsersWebName'} || 'Main';
+    
+    # If the Wiki User Topic doesn't exist, there is no forseeable conflict,
+    # so we return the candidate wikiname unchanged. We also return immediately
+    # if User Form Matching is disabled.
+    if (!Foswiki::Func::topicExists($web, $wikiname) || !$Foswiki::cfg{'UserFormMatch'}) {
+	return $wikiname;
+    }
+    
+    # otherwise, we see if the e-mail address matches the one in the user topic.
+    # if so, we pronounce a match.
+    my $fieldname = $Foswiki::cfg{Extensions}{OpenID}{UserFormMatchField} || 'Email';
+    my $options = {
+	type => 'query',
+	web => $web,
+    };
+
+    my $matches = Foswiki::Func::query("fields[name='$fieldname'].value=~'^\\s*$email\\s*\$'", ["$web.$wikiname"], $options);
+    while ($matches->hasNext) {
+	my $found = $matches->next;
+	my ($dummy, $wikiname) = Foswiki::Func::normalizeWebTopicName('', $found);
+	return $wikiname;
+    }
+    # No match. This means we shouldn't give out the candidate $wikiname.
+    return undef;
+}
+
+sub _isAlreadyMapped {
+    my $this = shift;
+    my $session = shift;
+    my $loginname = shift;
+    my $email = shift;
+    my $wikiname = shift;
+
+    # Currently, there doesn't seem to be a universal way to check
+    # whether a mapping between login name and username is already
+    # in place.
+    my $users = $session->{'users'}->findUserByEmail($email);
+    my $is_mapped = 0;    
+    if ($Foswiki::cfg{Register}{AllowLoginName}) {
+	my $aWikiname = Foswiki::Func::userToWikiName($loginname, 1);
+	$is_mapped = ($aWikiname eq $loginname) && (scalar @$users == 0);
+    } else {
+	# If login names are turned off, both true and false would make
+	# sense, but we return 0 so that on-the-spot user topic matching
+	# can be done in mapUser.
+	return 0;
+    }
+}
+   
+
+sub mapUser {
     my $this = shift;
     my $session = shift;
     my $id_token = shift;
 
     my $loginname = undef;
-    # TODO : This is way too simple. Fix it (duplicates, special characters etc)
-    my $wikiname = $this->buildWikiName($id_token);
+    my $candidate = $this->buildWikiName($id_token);
     
     if ($Foswiki::cfg{Register}{AllowLoginName}) {
 	$loginname = $this->extractLoginname($id_token);
     }
     else {
-	$loginname = $wikiname;
+	# SMELL: Turning off AllowLoginName for Open ID is a really bad idea. Should
+	# we complain, or add a warning to the log?
+	$loginname = $candidate;
     }
+    my $email = lc($this->extractEmail($id_token));
     
-    # Now we try to find/create a permanent mapping between loginname and username
-    my $cuid = $session->{users}->getCanonicalUserID($loginname);
-    if (!defined($cuid)) {
-	my $email = $this->extractEmail($id_token);
-	if (defined $email) {
-	    my $users = $session->{'users'}->findUserByEmail($email);
-	    if (scalar @$users == 1) {
-		# we've identified this user by his e-mail address. Now add
-		# the login name to the mapping		
-		$cuid = $users->[0];
-		my $wikiname = $session->{'users'}->getWikiName($cuid);
-		$session->{'users'}->addUser($loginname, $wikiname, undef, $email);
-		$session->logger->log({
-		    level    => 'info',
-		    action   => 'login',
-		    extra    => "UPDATED $cuid ($wikiname $email) - "
-				      });
+    if (!$this->_isAlreadyMapped($session, $loginname, $email, $candidate) {
+	my $wikiname = undef;
+	my $orig_candidate = $candidate;
+	my $counter = 1;
+	# Find an acceptable wikiname
+	while (!defined($wikiname)) {
+	    $wikiname = $this->matchWikiUser($candidate, $email);
+	    if (defined $wikiname) {
+		my $cuid = $session->{'users'}->addUser($loginname, $wikiname, undef, [$email]);
+		Foswiki::Func::writeDebug("OpenIDLoginContrib: Mapped user $cuid ($email) to $wikiname");
+		return $cuid;
 	    }
-	    else {
-		# we don't know this user. Add a new mapping for him.
-		$cuid = $session->{'users'}->addUser($loginname, $wikiname, undef, [$email]);
-		$session->logger->log({
-		    level    => 'info',
-		    action   => 'login',
-		    extra    => "REGISTERED $cuid ($wikiname $email) - "
-				      });
-	    }
+	    $counter = $counter + 1;
+	    $candidate = $orig_candidate . $counter;
 	}
+    } else {
+	# Mapping exists already, so return the canonical user id
+	my $cuid = $session->{users}->getCanonicalUserID($loginname);
+	return $cuid;
     }
-    return $cuid;
 }
 
 sub redirectToProvider {
@@ -264,7 +321,7 @@ sub oauthCallback {
 	    extra    => "AUTHENTICATION SUCCESS - $loginName ($hrReadable) - "
 			  });
 
-    my $cuid = $this->registerUser($session, $id_token);
+    my $cuid = $this->mapUser($session, $id_token);
     
     if ( !$origurl || $origurl eq $query->url() ) {
 	$origurl = $session->getScriptUrl( 0, 'view', $web, $topic );
