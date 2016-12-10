@@ -16,6 +16,7 @@ $Foswiki::cfg{Extensions}{OpenID}{Default}{ClientID} = '';
 # The client secret should be provided to you by your Open ID Provider
 $Foswiki::cfg{Extensions}{OpenID}{Default}{ClientSecret} = '';
 # **REGEX LABEL="Issuer Regex Match" CHECK="undefok emptyok"**
+# ID tokens only validate if their issuer claims match this regex.
 # OpenID works with ID tokens issued by an identity provider. This regex lets
 # you specify which identity providers you trust. If you leave this empty, the
 # issuer value from the discovery document will be used. However, some providers,
@@ -26,35 +27,42 @@ $Foswiki::cfg{Extensions}{OpenID}{Default}{ClientSecret} = '';
 # the format to expect.
 $Foswiki::cfg{Extensions}{OpenID}{Default}{IssuerRegex} = '';
 # ---+++ Users
-# **STRING LABEL="WikiName Attributes"**
-# Comma-separated ID token attributes which should make up the wiki name. The default
-# should give good results.
-$Foswiki::cfg{Extensions}{OpenID}{Default}{WikiNameAttributes} = 'given_name,family_name';
-# **STRING LABEL="Loginname Attribute"**
-# The ID Token attribute which will serves as a Loginname. The default is the subject
-# identifier. Don't change this if you don't know what you're doing.
-$Foswiki::cfg{Extensions}{OpenID}{Default}{LoginnameAttribute} = 'sub';
+# **STRING LABEL="WikiName Claims"**
+# Comma-separated ID token claims which should make up the WikiName.
+# The default should give good results, but depending on the provider, you might want
+# to experiment with other claims, such as the 'name' claim.
+$Foswiki::cfg{Extensions}{OpenID}{WikiNameAttributes} = 'given_name,family_name';
 
-# **NUMBER LABEL="Enable UserForm matching"**
-# You have no control over the people who will register via public Open ID providers.
-# If you want to reserve WikiNames for specific people, you can pre-register them by
-# creating a user topic with the given WikiName and pre-populating the E-Mail form field
-# of the UserForm field with the person's address. Enabling UserTopic matching will compare
-# the E-Mail returned in the ID Token with the one in the UserTopic and not give out the
-# WikiName if they don't match. (Don't rely on this for security! It isn't foolproof, as not
-# every identity provider verifies control over E-Mail addresses)
+# **STRING LABEL="Loginname Attribute"**
+# The ID token attribute which will serves as a Loginname.
+# The default is the subject identifier. Don't change this if you don't know what
+# you're doing.
+$Foswiki::cfg{Extensions}{OpenID}{LoginnameAttribute} = 'sub';
+
+# **BOOLEAN LABEL="Reserve WikiNames"**
+# Enable this to pre-assign WikiNames to specific people.
+# You can make sure that a WikiName will be assigned to a specific user by
+# creating a User topic (with the given WikiName) and populating it's EMail
+# form field value with the e-mail address of the user. When a user which
+# would ordinarily be mapped to the given WikiName authenticates, the e-mail
+# claim in his ID token is checked against the form field value and if they
+# don't match, the WikiName isn't given out to the user.
+# (Don't rely solely on this for security! It isn't foolproof, as not
+# every identity provider verifies control over e-mail addresses)
 $Foswiki::cfg{Extensions}{OpenID}{UserFormMatch} = 0;
 
-# **STRING LABEL="The form field to match in the user topic"**
-# By default, if UserForm matching is enabled, the form field to match is the EMail field.
-# If you've renamed this field, you can specify it's new name here.
+# **STRING LABEL="Form field to match"**
+# Specifies the form field to use for E-Mail address matching.
+# By default, if reserving of WikiNames is enabled, the form field to
+# match is the 'EMail' field. If this field has a different name in
+# your form, you can provide the name here.
 $Foswiki::cfg{Extensions}{OpenID}{UserFormMatchField} = 'Email';
 
 # **STRING LABEL="Forbidden Wikinames"**
 # A comma-separated list of WikiNames that should never be given out by this LoginManager.
-# WikiNames are constructed from ID Token contents. These can be partly controlled by people
-# of malicious intent. If someone were to name a Google Account Admin User, he'd get assigned
-# an 'AdminUser' wikiname, which probably wouldn't be a good thing, all things considered.
+# If a user authenticates whose ID token would produce one of the WikiNames on this list, the
+# user's WikiName will be 'WikiGuest'. 
+# WikiNames ending in ...Group are automatically rejected, so you don't need to list them here.
 $Foswiki::cfg{Extensions}{OpenID}{ForbiddenWikinames} = 'AdminUser,ProjectContributor,RegistrationAgent';
 
 1;

@@ -4,9 +4,12 @@ use LWP::UserAgent;
 use MIME::Base64;
 use JSON;
 
+use strict;
+use warnings;
+
 package Foswiki::Contrib::OpenIDLoginContrib::OpenIDConnect;
 use Exporter 'import';
-@EXPORT_OK = qw(endpoint_discovery get_auth_endpoint get_token_endpoint get_supported_scopes exchange_code_for_id_token random_bytes);
+our @EXPORT_OK = qw(endpoint_discovery get_token_endpoint build_auth_request exchange_code_for_id_token random_bytes);
 
 sub endpoint_discovery {
     my $discovery_uri = shift;
@@ -41,6 +44,32 @@ sub retrieve_public_keys {
     return $keys;
 }
 
+sub build_auth_request {
+    my $discovery = shift;
+    my $client_id = shift;
+    my $redirect_uri = shift;
+    my $state = shift;
+
+    Foswiki::Func::writeDebug("client_id is $client_id");
+        
+    my $endpoint = get_auth_endpoint($discovery);
+    my %supported_scopes = map { $_ => 1 } @{get_supported_scopes($discovery) };
+    my $scopes = "openid";
+    $scopes .= " email" if exists($supported_scopes{"email"});
+    $scopes .= " profile" if exists($supported_scopes{"profile"});
+    
+    my $params = {
+	client_id => $client_id,
+	response_type => "code",
+	scope => $scopes,
+	redirect_uri => $redirect_uri,
+	state => $state,
+	nonce => $state
+    };
+    my $query = urlencode_hash($params);
+    return $endpoint . "?" . $query;
+}
+
 sub exchange_code_for_id_token {
     my $endpoints = shift;
     my $client_id = shift;
@@ -68,8 +97,8 @@ sub exchange_code_for_id_token {
 	my $data = verify_id_token($id_token, $keys, $client_id, $issuer);
 	return $data;
     } else {
-	# doesn't seem to do anything ???
-	#Foswiki::logger->log("debug", $response->code, $response->message);
+	Foswiki::Func::writeDebug("OpenIDLoginContrib: Protocol error! Couldn't exchange auth code for token.");
+	Foswiki::Func::writeDebug("OpenIDLoginContrib: code='$code', response msg=" . $response->message . " content=" . $response->decoded_content);
 	die "Couldn't exchange code for a bearer token: " . $response->message . "\n";
     }
 }
@@ -131,5 +160,15 @@ sub decode {
     my $arg = shift;
     return MIME::Base64::decode($arg);
 }
+
+sub urlencode_hash {
+    my $hash = shift;
+    my @query = ();
+    foreach my $key (keys %$hash) {
+	push(@query, $key . "=" . Foswiki::urlEncode($hash->{$key}));
+    }
+    return join("&", @query);
+}
+
 
 1;

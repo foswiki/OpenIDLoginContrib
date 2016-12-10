@@ -4,14 +4,8 @@
 
 ---+ package Foswiki::Contrib::OpenIDLoginContrib
 
-This is a stub module for a new contrib. Customise this module as
-required.  It is typically not used by the Contrib.  Foswiki does not load it
-automatically.  It is used by the Extensions Installer to detect the currently
-installed version of the Contrib.
-
 =cut
 
-# change the package name!!!
 package Foswiki::Contrib::OpenIDLoginContrib;
 
 # Always use strict to enforce variable scoping
@@ -48,10 +42,10 @@ our $VERSION = '1.00';
 # It is preferred to keep this compatible with $VERSION. At some future
 # date, Foswiki will deprecate RELEASE and use the VERSION string.
 #
-our $RELEASE = '08 Dec 2016';
+our $RELEASE = '1.0.0';
 
 # One-line description of the module
-our $SHORTDESCRIPTION = 'Enables Authentication via OpenID Connect';
+our $SHORTDESCRIPTION = 'Provides a LoginManager to authenticate via OpenID Connect';
 
 1;
 

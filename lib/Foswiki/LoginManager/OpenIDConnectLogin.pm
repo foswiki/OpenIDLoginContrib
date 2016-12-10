@@ -18,8 +18,9 @@ package Foswiki::LoginManager::OpenIDConnectLogin;
 
 ---+ Foswiki::LoginManager::OpenIDConnectLogin
 
-This provides an external authentication system, namely
-OpenID Connect. 
+This provides a LoginManager which can authenticate using 
+OpenID Connect, while still providing access to the underlying
+TemplateLogin manager.
 
 =cut
 
@@ -29,10 +30,7 @@ use Foswiki;
 use Foswiki::LoginManager::TemplateLogin ();
 use Foswiki::Sandbox ();
 
-use LWP::UserAgent;
-use JSON;
-
-use Foswiki::Contrib::OpenIDLoginContrib::OpenIDConnect qw(endpoint_discovery get_auth_endpoint get_supported_scopes exchange_code_for_id_token random_bytes);
+use Foswiki::Contrib::OpenIDLoginContrib::OpenIDConnect qw(endpoint_discovery build_auth_request exchange_code_for_id_token random_bytes);
 
 @Foswiki::LoginManager::OpenIDConnectLogin::ISA = qw( Foswiki::LoginManager::TemplateLogin );
 
@@ -69,8 +67,8 @@ sub loadProviderData {
     $this->{client_secret} = $Foswiki::cfg{'Extensions'}{'OpenID'}{$provider}{'ClientSecret'};
     $this->{issuer} = $Foswiki::cfg{'Extensions'}{'OpenID'}{$provider}{'IssuerRegex'};
     $this->{redirect_uri} = $Foswiki::cfg{'Extensions'}{'OpenID'}{$provider}{'RedirectURL'};
-    $this->{loginname_attr} = $Foswiki::cfg{'Extensions'}{'OpenID'}{$provider}{'LoginnameAttribute'};
-    $this->{wikiname_attrs} = $Foswiki::cfg{'Extensions'}{'OpenID'}{$provider}{'WikiNameAttributes'};   
+    $this->{loginname_attr} = $Foswiki::cfg{'Extensions'}{'OpenID'}{$provider}{'LoginnameAttribute'} || $Foswiki::cfg{'Extensions'}{'OpenID'}{'LoginnameAttribute'};
+    $this->{wikiname_attrs} = $Foswiki::cfg{'Extensions'}{'OpenID'}{$provider}{'WikiNameAttributes'} || $Foswiki::cfg{'Extensions'}{'OpenID'}{'WikiNameAttributes'};
 }
 
 
@@ -105,38 +103,6 @@ sub extractLoginname {
     return $login;
 }
 
-sub urlencode_hash {
-    my ($this, $session, $hash) = @_;
-    my @query = ();
-    foreach my $key (keys %$hash) {
-	push(@query, $key . "=" . Foswiki::urlEncode($hash->{$key}));
-    }
-    return join("&", @query);
-}
-
-sub build_auth_request {
-    my $this = shift;
-    my $session = shift;
-    my $origin = shift;
-
-    my $endpoint = get_auth_endpoint($this->{endpoints});
-    my %supported_scopes = map { $_ => 1 } @{get_supported_scopes($this->{endpoints}) };
-    my $scopes = "openid";
-    $scopes .= " email" if exists($supported_scopes{"email"});
-    $scopes .= " profile" if exists($supported_scopes{"profile"});
-    
-    my $params = {
-	client_id => $this->{client_id},
-	response_type => "code",
-	scope => $scopes,
-	redirect_uri => $this->{redirect_uri},
-	state => $this->serializedState($origin),
-	nonce => 'something_fix_me'
-    };
-    my $query = $this->urlencode_hash($session, $params);
-    return $endpoint . "?" . $query;
-}
-
 sub buildWikiName {
     my $this = shift;
     my $idtoken = shift;
@@ -148,7 +114,11 @@ sub buildWikiName {
     # some minimal normalization
     $wikiname =~ s/\s+//g;
 
-    # Forbidden wikinames get mapped to the WikiGuest name
+    if ($wikiname =~ m/Group$/) {
+	return $Foswiki::cfg{DefaultUserWikiName};
+    }
+    
+    # Forbidden wikinames get mapped to WikiGuest too
     my @forbidden = split(/\s+,\s+/, $Foswiki::cfg{Extensions}{OpenID}{ForbiddenWikinames});
     for my $bignono (@forbidden) {
 	if ($wikiname eq $bignono) {
@@ -236,7 +206,7 @@ sub mapUser {
 	my $wikiname = undef;
 	my $orig_candidate = $candidate;
 	my $counter = 1;
-	# Find an acceptable wikiname
+	# Find an acceptable wikiname. We simply add an increasing number if a name is taken already
 	while (!defined($wikiname)) {
 	    $wikiname = $this->matchWikiUser($candidate, $email);
 	    if (defined $wikiname) {
@@ -262,24 +232,25 @@ sub redirectToProvider {
     
     my $origin = $query->param('foswiki_origin');
     # Avoid accidental passthrough
-    $query->delete( 'foswiki_origin', 'provider' );
+    $query->delete( 'foswiki_origin', 'provider');
 
-    my $topic  = $session->{topicName};
-    my $web    = $session->{webName};
-    my $path_info = $query->path_info();
-    Foswiki::Func::writeDebug("redirect from $web.$topic ($path_info)");
+    my $topic = $session->{topicName};
+    my $web = $session->{webName};
         
     $this->loadProviderData($provider);
     
-    my $request_uri = $this->build_auth_request($session, $origin);
+    my $request_uri = build_auth_request($this->{endpoints},
+					 $this->{client_id}, 
+					 $this->{redirect_uri}, 
+					 $this->serializedState());
     my $response = $session->{response};
-    
-    my $stored_state = $this->serializedState();
-    Foswiki::Func::setSessionValue('openid_state', $stored_state);
+
+    Foswiki::Func::setSessionValue('openid_state', $this->serializedState());
     Foswiki::Func::setSessionValue('openid_provider', $provider);
     Foswiki::Func::setSessionValue('openid_origin', $origin);
     Foswiki::Func::setSessionValue('openid_web', $web);
     Foswiki::Func::setSessionValue('openid_topic', $topic);
+    # We should also store the nonce value, but right now we simply ignore it
     
     $response->redirect($request_uri);
 }
@@ -427,7 +398,7 @@ sub login {
     # the callback handler. If we don't get any parameters, we
     # display the login template to allow the user to pick a provider.
     # The 'native' provider value is there for graceful degradation
-    # - it provides a way to access the original behaviour of the
+    # - it provides explicit access to the original behaviour of the
     # TemplateLogin.
     
     if ((defined $provider) && ($provider ne 'native')) {

@@ -1,4 +1,4 @@
-!noci
+!ci
 data/System/OpenIDLoginContrib.txt 0644 Documentation page
 pub/System/OpenIDLoginContrib/openidlogin.css 0644
 pub/System/OpenIDLoginContrib/openidlogin.js 0644
@@ -9,7 +9,6 @@ templates/openidlogin.pattern.tmpl 0644
 templates/openidlogin.nat.tmpl 0644
 templates/openidlogin.tmpl 0644
 templates/openidloginbase.tmpl 0644
-data/System/OpenIDLoginContrib.txt 0644 Documentation page
 lib/Foswiki/Contrib/OpenIDLoginContrib.pm  Perl module 
 lib/Foswiki/Contrib/OpenIDLoginContrib/Config.spec 0444 Configuration
 lib/Foswiki/Contrib/OpenIDLoginContrib/OpenIDConnect.pm  Perl module
