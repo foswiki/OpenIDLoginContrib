@@ -1,4 +1,4 @@
-%META:TOPICINFO{author="ProjectContributor" comment="" date="1481365964" format="1.1" reprev="3" version="3"}%
+%META:TOPICINFO{author="ProjectContributor" comment="" date="1481449578" format="1.1" reprev="1" version="1"}%
 %META:TOPICPARENT{name="Contribs"}%
 <!--
 One line description, required for extensions repository catalog.
@@ -19,43 +19,46 @@ If you have any problems, or if the extension isn't available in =configure=, th
 
 ---++ Configuration
 
-Configuration of Open ID Authentication for your Foswiki site requires a fair amount of work, knowledge about Foswiki's configuration files and at least a passing understanding of it's templating system.
+Configuration of Open ID Connect Authentication for your Foswiki site requires a bit of work, knowledge about Foswiki's configuration files and at least a passing understanding of it's templating system.
 
 Before you begin, make sure you have registered a new application/client (the terminology differs from provider to provider) with at least one Open ID Connect provider (if you don't know how, check out the reference links at the bottom of the page). You also need access to your Foswiki installation's templates folder, as you'll have to edit the login template to suit your needs.
 
----+++ Required information
+---+++ Requirements
+
+*Important:* Open ID Connect is not compatible with the original Open ID protocols. Therefore, you can't use OpenIDLoginContrib to connect with older (Open ID 1.0 or 2.0) providers which don't offer Open ID Connect yet.
 
 You need the following information before you can continue:
    1. Your Application/Client ID
    1. Your Application/Client Secret
-   1. The Open ID discovery/configuration document URL. The URL should end in =/.well_known/openid-configuration=. If you open this URL, you should
-      see a JSON document listing various oauth api endpoint URLs.
-   1. The issuer string. This is usually an URI and you can find it in the discovery/configuration document under the 'iss' key.
+   1. The Open ID discovery/configuration document URL. The URL usually ends in =/.well_known/openid-configuration=. If you open this URL, you should
+      see a JSON document listing various OAuth API endpoint URLs, supported scopes, claims etc.
+   1. (The issuer string. You can find it in the discovery/configuration document under the 'issuer' key. _This is only necessary if you encounter 'wrong issuer' verification errors._)
    1. You also need to know the full URL to your Foswiki installation's login script. This is the _redirect_ or _callback_ URL that you need to
       provide when registering a new application/client with your Open ID provider.
 
-If you want your users to be able to authenticate using multiple Open ID providers, make sure you have the information for points one through four
-for each of them.
+If you want your users to be able to authenticate using multiple Open ID providers, make sure you have the information for points one through four for each of them.
 
-The information for the first Open ID Provider can be entered using Foswiki's web-based configuration tool ([[%SCRIPTURLPATH{"configure"}%]]) under the "Open ID" rider which you'll find under "Security and Authentication" . Any additional providers must be added to the Localsite.cfg configuration file manually. The first provider's key is named 'Default'; you can name additional provider's keys however you wish.
-
+The information for the first Open ID Provider can be entered using Foswiki's web-based configuration tool ([[%SCRIPTURLPATH{"configure"}%]]) under the "Open ID" tab which you'll find under "Security and Authentication" . Any additional providers must be added to the =LocalSite.cfg= configuration file manually. The first provider's key is named 'Default'; you can name additional provider's keys however you wish.
 ---+++ Open ID Login and the Foswiki authentication infrastructure
 
 In order to enable Open ID authentication, you need to switch Foswiki's !LoginManager from whatever solution you're currently using over to Foswiki::LoginManager::OpenIDConnectLogin. If you were previously using an authentication scheme that made use of !TemplateLogin, chances are you will be able to keep it working in parallel with Open ID authentication.
 
 The !OpenIDConnectLogin manager obviously doesn't require a password backend. Currently, it also doesn't provide it's own user mapper. I suggest you use !TopicUserMapping in order to get a stable mapping from a third-party account to a WikiName, but this isn't required for authentication.
 
-Not having our own user mapper has it's downsides. For example, if you have accounts with multiple Open ID providers, it is currently not possible to explicitely link these accounts in Foswiki while retaining the use of loginnames. You may still manage to map both accounts to the same WikiName, though, by disabling the use of loginnames in the Foswiki configuration.
+Not having our own user mapper has it's downsides. For example, if you have accounts with multiple Open ID providers, it is currently not possible to explicitely link these accounts in Foswiki while retaining the use of loginnames. You also can't link a native Foswiki user account and an Open ID account. You may manage to map both accounts to the same WikiName, but unless you disable the use of loginnames in the Foswiki configuration, this is only a cosmetic operation; it doesn't really link the identities
 
----+++ Adjusting the openid login template
+*Warning:* You are strongly discouraged from disabling the use of loginnames. In fact, you should only ever consider this if you either have full control over all the Open ID providers enabled for your site, or if you don't care about people being able to impersonate others.
 
-Since openid is a decentralized authentication solution, users usually are given a choice of which Open ID provider they want to use. On all websites which allow their users to authenticate using Open ID, this choice replaces (or extends) the login dialog; so instead of a form with username and password fields, the login dialog under Open ID Connect Login consists of a number of icons or buttons, each representing an Open ID Connect provider. So your login dialog may look like this:
+---+++ Adjusting the Open ID login template
+
+Since Open ID is a decentralized authentication solution, users usually are given a choice of which Open ID provider they want to use. On all websites which allow their users to authenticate using Open ID, this choice replaces (or extends) the login dialog; so instead of a form with username and password fields, the login dialog under Open ID Connect Login consists of a number of icons or buttons, each representing an Open ID Connect provider. So your login dialog may look like this:
 
 <img src="%ATTACHURL%/patternskin_openid_login_screenshot.png">
 
-This is exactly what you get to see if you have Foswiki's Pattern skin installed. However, the choice between the these two providers that the login template offers by default is most likely not what you need. Currently, there is no way around manually fixing the =openidloginbase.tmpl= template. 
-
 Even if there was only a single provider, showing the login template would still be necessary to give the user a chance to opt out of using an Open ID and switch back to providing native credentials instead. This is what the "I don't use any of those" link  is for: It will allow users to authenticate using the default !TemplateLogin. If you do not wish to offer native authentication, remove the link from the template. This won't disable the functionality, but hide it from the users. 
+
+The above screenshot is exactly what you see if you have PatternSkin installed, but it won't work just yet. You need to logically connect these icons to the providers you configured earlier on. Also, you might want to 
+offer a different list of providers, change the images etc. Currently, there is no way around manually fixing the =openidloginbase.tmpl= template to achieve all this.
 
 To fix the login page, open the =openidloginbase.tmpl= and edit the lines at the very end to conform to the providers you need:
 
@@ -74,10 +77,9 @@ login templates that should work with these skins out of the box (If they don't,
 If you are using another Skin, create your own =openidlogin.skin.tmpl= template to act as an "interface" between the standard login template for your skin and =openidloginbase.tmpl=. Basically, this template should add the =openidstep= template to the standard login template and mark the other form fields with the =native_credentials= css class to make them invisible when the login page is first loaded.
 
 If you are not happy with the default look of the icons or the whole login template, you can also edit the =openidlogin.css= file, which is also attached to *this* topic.
-
 ---++ Supported Open ID Connect Providers
 
-OpenIDLoginContrib aims to support all Open ID Connect providers which adhere to the standard. However, reality tends to intrude. So here's the current list of which providers were tested. If you've tested another provider, please contact me so I can update the table.
+OpenIDLoginContrib aims to eventually support all Open ID Connect providers which adhere to the standard. However, reality tends to intrude. So here's the current list of which providers were tested.
 
 | *Provider* | *State* |
 | Microsoft | %GREEN%Works%ENDCOLOR% |
@@ -87,12 +89,13 @@ OpenIDLoginContrib aims to support all Open ID Connect providers which adhere to
 
 *Facebook has it's own implementation called "Facebook Connect", which is close enough to Open ID Connect to warrant eventual support by this Contrib.
 
-
 ---++ Bugs, Shortcomings, Future work
 
-   1. Currently, there is no way to permanently log off. Destroying the Foswiki session isn't enough, because someone with access to the browser can simply re-authenticate without needing to enter a password. This is a hard problem. Several Open ID providers offer solutions for this in the form of a logout endpoint, but this functionality hasn't been implemented yet.
-   2. We also don't do any registration of new users. An Open ID token doesn't yield much information, but we can get at least the given name, family name and e-mail address out of an ID token.
+   1. There is a problem with redirection to an action other than view when logging in. This is annoying and shall be fixed soon.
+   2. Currently, there is no way to permanently log off. Destroying the Foswiki session isn't enough, because someone with access to the browser can simply re-authenticate without needing to enter a password. This is a hard problem. Several Open ID providers offer solutions for this in the form of a logout endpoint, but this functionality hasn't been implemented yet.
+   3. We also don't do any registration of new users. An Open ID token doesn't yield much information, but we can get at least the given name, family name and e-mail address out of an ID token.
    4. Future work should include support for Facebook Connect, which is a nearly identical implementation with a few gotchas. 
+   5. The code is still new and needs thorough testing. Bug reports are welcome.
 ---++ Important files
 
 There are several places where you can tweak the configuration of Open ID Connect Login:
@@ -101,9 +104,15 @@ There are several places where you can tweak the configuration of Open ID Connec
 | =/pub/System/OpenIDLoginContrib/openidlogin.css= | contains css to format the =openidlogin= templates |
 | =/pub/System/OpenIDLoginContrib/openidlogin.js= | contains javascript for the login page |
 
-Please note that these files, especially your templates which aren't under version control, may be overwritten when you update OpenIDLoginContrib.
+Please note that these files, especially your templates which aren't under version control, will be overwritten when you update OpenIDLoginContrib.
 
 ---++ Nice to know
+
+---+++ Reserving !WikiNames for specific people
+
+Letting just anyone register via Open ID has its downsides: A common problem is that you don't control which WikiNames will get "taken". So how can you   make sure your good friend John Smith gets !JohnSmith even though he's taking his time logging in for the first time?
+
+Easy. Enable WikiName Reservation in the configuration settings. Then create the !JohnSmith topic in the users web and add his e-mail-address to the user form. Now only the John Smith who claims this e-mail-address will get the WikiName. The other John Smiths will get mapped to !JohnSmith2, !JohnSmith3 and so on. This isn't designed to withstand malicious attacks, but should keep accidental assignment of a WikiName from happening. 
 
 ---+++ Bypassing Open ID and falling back to standard !TemplateLogin
 
@@ -132,15 +141,15 @@ Note: The issuer check is secure by default, but is configurable using the !Issu
 
 |  Dependencies: | <table border="1" class="foswikiTable"><tr><th>Name</th><th>Version</th><th>Description</th></tr><tr><td align="left">MIME::Base64</td><td align="left"></td><td align="left">Required</td></tr><tr><td align="left">LWP::UserAgent</td><td align="left">&gt;=6.15</td><td align="left">Required for OAuth 2 Server Flow</td></tr><tr><td align="left">Crypt::JWT</td><td align="left">&gt;=0.010</td><td align="left">Required for JWT signature verification</td></tr><tr><td align="left">Crypt::Random</td><td align="left"></td><td align="left">Required for cryptographically secure nonces</td></tr><tr><td align="left">JSON</td><td align="left"></td><td align="left">Required </td></tr></table> |
 |  Change History: | <!-- versions below in reverse order -->&nbsp; |
-|  1.0.0 (XX Mmm 20XX): | Initial version |
+|  1.0.0 (11 Dec 2016): | Initial release |
 
 %META:FORM{name="PackageForm"}%
 %META:FIELD{name="Author" title="Author" value="PascalSchuppli"}%
 %META:FIELD{name="Version" title="Version" value="1.00"}%
-%META:FIELD{name="Release" title="Release" value="08 Dec 2016"}%
+%META:FIELD{name="Release" title="Release" value="11 Dec 2016"}%
 %META:FIELD{name="Description" title="Description" value="Enables Authentication via !OpenID Connect"}%
 %META:FIELD{name="Repository" title="Repository" value="https://github.com/foswiki/OpenIDLoginContrib"}%
-%META:FIELD{name="Copyright" title="Copyright" value="&copy; %25$CREATEDYEAR%25, PascalSchuppli, All Rights Reserved"}%
+%META:FIELD{name="Copyright" title="Copyright" value="&copy; 2016, PascalSchuppli, All Rights Reserved"}%
 %META:FIELD{name="License" title="License" value="GPL ([[http://www.gnu.org/copyleft/gpl.html][GNU General Public License]])"}%
 %META:FIELD{name="Home" title="Home" value="http://foswiki.org/Extensions/%25TOPIC%25"}%
 %META:FIELD{name="Support" title="Support" value="http://foswiki.org/Support/%25TOPIC%25"}%

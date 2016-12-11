@@ -31,6 +31,7 @@ use Foswiki::LoginManager::TemplateLogin ();
 use Foswiki::Sandbox ();
 
 use Foswiki::Contrib::OpenIDLoginContrib::OpenIDConnect qw(endpoint_discovery build_auth_request exchange_code_for_id_token random_bytes);
+use JSON;
 
 @Foswiki::LoginManager::OpenIDConnectLogin::ISA = qw( Foswiki::LoginManager::TemplateLogin );
 
@@ -189,7 +190,7 @@ sub matchWikiUser {
     # If the Wiki User Topic doesn't exist, there is no forseeable conflict,
     # so we return the candidate wikiname unchanged. We also return immediately
     # if User Form Matching is disabled.
-    if (!Foswiki::Func::topicExists($web, $wikiname) || !$Foswiki::cfg{'UserFormMatch'}) {
+    if (!Foswiki::Func::topicExists($web, $wikiname) || !$Foswiki::cfg{Extensions}{OpenID}{UserFormMatch}) {
 	return $wikiname;
     }
     
@@ -224,17 +225,16 @@ sub _isAlreadyMapped {
     my $this = shift;
     my $session = shift;
     my $loginname = shift;
-    my $email = shift;
     my $wikiname = shift;
 
     # Currently, there doesn't seem to be a universal way to check
     # whether a mapping between login name and username is already
     # in place.
-    my $users = $session->{'users'}->findUserByEmail($email);
     my $is_mapped = 0;    
     if ($Foswiki::cfg{Register}{AllowLoginName}) {
 	my $aWikiname = Foswiki::Func::userToWikiName($loginname, 1);
 	$is_mapped = $aWikiname ne $loginname;
+	return $is_mapped;
     } else {
 	# It's important to return 0 here so that if mapping is turned
 	# off, on-the-spot pre-assignment checking is initiated by mapUser.
@@ -276,17 +276,21 @@ sub mapUser {
     }
     my $email = lc($this->extractEmail($id_token));
     
-    if (!$this->_isAlreadyMapped($session, $loginname, $email, $candidate)) {
+    if (!$this->_isAlreadyMapped($session, $loginname, $candidate)) {
 	my $wikiname = undef;
 	my $orig_candidate = $candidate;
 	my $counter = 1;
 	# Find an acceptable wikiname. We simply add an increasing number if a name is taken already
 	while (!defined($wikiname)) {
-	    $wikiname = $this->matchWikiUser($candidate, $email);
-	    if (defined $wikiname) {
-		my $cuid = $session->{'users'}->addUser($loginname, $wikiname, undef, [$email]);
-		Foswiki::Func::writeDebug("OpenIDLoginContrib: Mapped user $cuid ($email) to $wikiname");
-		return $cuid;
+	    my $users = $session->{users}->findUserByWikiName($candidate);
+	    if (scalar @$users == 0) {
+		$wikiname = $this->matchWikiUser($candidate, $email);
+		Foswiki::Func::writeDebug("OpenIDLoginContrib: matchWikiUser for $candidate produces $wikiname");
+		if (defined $wikiname) {
+		    my $cuid = $session->{'users'}->addUser($loginname, $wikiname, undef, [$email]);
+		    Foswiki::Func::writeDebug("OpenIDLoginContrib: Mapped user $cuid ($email) to $wikiname");
+		    return $cuid;
+		}
 	    }
 	    $counter = $counter + 1;
 	    $candidate = $orig_candidate . $counter;
@@ -294,6 +298,7 @@ sub mapUser {
     } else {
 	# Mapping exists already, so return the canonical user id
 	my $cuid = $session->{users}->getCanonicalUserID($loginname);
+	Foswiki::Func::writeDebug("OpenIDLoginContrib: Use preexisting mapping for $loginname");
 	return $cuid;
     }
 }
@@ -377,13 +382,14 @@ sub oauthCallback {
  	$this->{'issuer'},
 	$this->{'redirect_uri'},
 	$code);
-
+    Foswiki::Func::writeDebug("OpenIDLoginContrib: ID Token: " . JSON::encode_json($id_token));
+    
     my $cuid = $this->mapUser($session, $id_token);
     # SMELL: This isn't part of the public API! But Foswiki::Func doesn't provide login name lookup and
     # wikiname lookup doesn't work yet at that stage (yields the loginname, ironically...)
     my $wikiname = $session->{users}->getWikiName($cuid);
     my $loginName = $session->{users}->getLoginName($cuid);
-    
+       
     $this->userLoggedIn($loginName);
     $session->logger->log({
 	    level    => 'info',
