@@ -68,4 +68,8 @@ $Foswiki::cfg{Extensions}{OpenID}{UserFormMatchField} = 'Email';
 # WikiNames ending in ...Group are automatically rejected, so you don't need to list them here.
 $Foswiki::cfg{Extensions}{OpenID}{ForbiddenWikinames} = 'AdminUser,ProjectContributor,RegistrationAgent';
 
+# **BOOLEAN LABEL="Enable Debugging"**
+# This will log debugging information such as the ID token contents, which helps in setting up a new provider.
+$Foswiki::cfg{Extensions}{OpenID}{Debug} = 0;
+
 1;

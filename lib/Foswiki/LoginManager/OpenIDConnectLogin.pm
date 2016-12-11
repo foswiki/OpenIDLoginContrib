@@ -285,10 +285,10 @@ sub mapUser {
 	    my $users = $session->{users}->findUserByWikiName($candidate);
 	    if (scalar @$users == 0) {
 		$wikiname = $this->matchWikiUser($candidate, $email);
-		Foswiki::Func::writeDebug("OpenIDLoginContrib: matchWikiUser for $candidate produces $wikiname");
+		Foswiki::Func::writeDebug("OpenIDLoginContrib: matchWikiUser for $candidate produces $wikiname") if $Foswiki::cfg{Extensions}{OpenID}{Debug};
 		if (defined $wikiname) {
 		    my $cuid = $session->{'users'}->addUser($loginname, $wikiname, undef, [$email]);
-		    Foswiki::Func::writeDebug("OpenIDLoginContrib: Mapped user $cuid ($email) to $wikiname");
+		    Foswiki::Func::writeDebug("OpenIDLoginContrib: Mapped user $cuid ($email) to $wikiname") if $Foswiki::cfg{Extensions}{OpenID}{Debug};
 		    return $cuid;
 		}
 	    }
@@ -298,7 +298,7 @@ sub mapUser {
     } else {
 	# Mapping exists already, so return the canonical user id
 	my $cuid = $session->{users}->getCanonicalUserID($loginname);
-	Foswiki::Func::writeDebug("OpenIDLoginContrib: Use preexisting mapping for $loginname");
+	Foswiki::Func::writeDebug("OpenIDLoginContrib: Use preexisting mapping for $loginname") if $Foswiki::cfg{Extensions}{OpenID}{Debug};
 	return $cuid;
     }
 }
@@ -382,7 +382,7 @@ sub oauthCallback {
  	$this->{'issuer'},
 	$this->{'redirect_uri'},
 	$code);
-    Foswiki::Func::writeDebug("OpenIDLoginContrib: ID Token: " . JSON::encode_json($id_token));
+    Foswiki::Func::writeDebug("OpenIDLoginContrib: ID Token: " . JSON::encode_json($id_token)) if $Foswiki::cfg{Extensions}{OpenID}{Debug};
     
     my $cuid = $this->mapUser($session, $id_token);
     # SMELL: This isn't part of the public API! But Foswiki::Func doesn't provide login name lookup and
