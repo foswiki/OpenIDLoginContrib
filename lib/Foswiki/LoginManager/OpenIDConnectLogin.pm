@@ -131,6 +131,7 @@ sub extractLoginname {
     # SMELL: This is here to make valid login names out of MS Azure AD subject values. Probably shouldn't be
     # done here, and this explicitly.
     $login =~ s/-/_/g;
+    
     return $login;
 }
 
@@ -358,8 +359,14 @@ sub oauthCallback {
     my $provider = $this->getAndClearSessionValue('openid_provider');
     my $origin = $this->getAndClearSessionValue('openid_origin');
     my $web = $this->getAndClearSessionValue('openid_web');
-    my $topic = $this->getAndClearSessionValue('openid_topic');    
-    die "OpenIDLoginContrib detected state mismatch ('$stored_state' vs '$state') - attack in progress?" unless ($stored_state eq $state);
+    my $topic = $this->getAndClearSessionValue('openid_topic');
+
+    if ($stored_state ne $state) {
+	Foswiki::Func::writeDebug("OpenIDLoginContrib: Detected state mismatch ('$stored_state' vs '$state') - attack in progress?");
+	throw Foswiki::OopsException( 'oopsattention', def => 'generic',
+				  params => [ "We encountered a protocol error. We can't sign you in at this time."  ] );    
+    }
+    
     $this->{state} = $state;
 
     $this->loadProviderData($provider);
@@ -371,20 +378,21 @@ sub oauthCallback {
 	$this->{'redirect_uri'},
 	$code);
 
-    my ( $origurl, $origmethod, $origaction ) = Foswiki::LoginManager::TemplateLogin::_unpackRequest($origin);
+    my $cuid = $this->mapUser($session, $id_token);
+    # SMELL: This isn't part of the public API! But Foswiki::Func doesn't provide login name lookup and
+    # wikiname lookup doesn't work yet at that stage (yields the loginname, ironically...)
+    my $wikiname = $session->{users}->getWikiName($cuid);
+    my $loginName = $session->{users}->getLoginName($cuid);
     
-    my $loginName = $this->extractLoginname($id_token);
-    my $hrReadable = $id_token->{'given_name'} . $id_token->{'family_name'};
     $this->userLoggedIn($loginName);
     $session->logger->log({
 	    level    => 'info',
 	    action   => 'login',
 	    webTopic => $web . '.' . $topic,
-	    extra    => "AUTHENTICATION SUCCESS - $loginName ($hrReadable) - "
+	    extra    => "AUTHENTICATION SUCCESS - $loginName ($wikiname) - "
 			  });
-
-    my $cuid = $this->mapUser($session, $id_token);
     
+    my ( $origurl, $origmethod, $origaction ) = Foswiki::LoginManager::TemplateLogin::_unpackRequest($origin);
     if ( !$origurl || $origurl eq $query->url() ) {
 	$origurl = $session->getScriptUrl( 0, 'view', $web, $topic );
     } 

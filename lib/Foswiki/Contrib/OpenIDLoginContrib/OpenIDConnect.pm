@@ -16,7 +16,7 @@ sub endpoint_discovery {
     my $ua = LWP::UserAgent->new;
     my $response = $ua->get($discovery_uri);
     if (!$response->is_success) {
-	Foswiki::Func::writeDebug("OpenIDLoginContrib: Could not retrieve Open ID endpoint configuration at $discovery_uri:");
+	Foswiki::Func::writeDebug("OpenIDLoginContrib: Could not retrieve Open ID endpoint configuration at '$discovery_uri':");
 	Foswiki::Func::writeDebug("OpenIDLoginContrib: response status=" . $response->message . " content=" . $response->decoded_content);
         throw_error("We encountered a protocol error while trying to fetch your Open ID provider configuration.");
     }
