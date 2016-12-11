@@ -15,7 +15,11 @@ sub endpoint_discovery {
     my $discovery_uri = shift;
     my $ua = LWP::UserAgent->new;
     my $response = $ua->get($discovery_uri);
-    die "Could not retrieve Open ID endpoint configuration at $discovery_uri" if !$response->is_success;
+    if (!$response->is_success) {
+	Foswiki::Func::writeDebug("OpenIDLoginContrib: Could not retrieve Open ID endpoint configuration at $discovery_uri:");
+	Foswiki::Func::writeDebug("OpenIDLoginContrib: response status=" . $response->message . " content=" . $response->decoded_content);
+        throw_error("We encountered a protocol error while trying to fetch your Open ID provider configuration.");
+    }
     return JSON::decode_json($response->decoded_content);
 }
 
@@ -39,7 +43,11 @@ sub retrieve_public_keys {
     my $keydiscovery = $discovery->{'jwks_uri'};
     my $ua = LWP::UserAgent->new;
     my $response = $ua->get($keydiscovery);
-    die "Could not retrieve public keys" if !$response->is_success;    
+    if (!$response->is_success) {
+	Foswiki::Func::writeDebug("OpenIDLoginContrib: Could not retrieve public keys from $keydiscovery:");
+	Foswiki::Func::writeDebug("OpenIDLoginContrib: response status=" . $response->message . " content=" . $response->decoded_content);
+        throw_error("We encountered a protocol error while trying to fetch your Open ID provider's signing keys.");
+    }    
     my $keys = JSON::decode_json($response->decoded_content)->{'keys'};
     return $keys;
 }
@@ -49,8 +57,6 @@ sub build_auth_request {
     my $client_id = shift;
     my $redirect_uri = shift;
     my $state = shift;
-
-    Foswiki::Func::writeDebug("client_id is $client_id");
         
     my $endpoint = get_auth_endpoint($discovery);
     my %supported_scopes = map { $_ => 1 } @{get_supported_scopes($discovery) };
@@ -99,9 +105,17 @@ sub exchange_code_for_id_token {
     } else {
 	Foswiki::Func::writeDebug("OpenIDLoginContrib: Protocol error! Couldn't exchange auth code for token.");
 	Foswiki::Func::writeDebug("OpenIDLoginContrib: code='$code', response msg=" . $response->message . " content=" . $response->decoded_content);
-	die "Couldn't exchange code for a bearer token: " . $response->message . "\n";
+
+	throw_error("We encountered a protocol error while trying to redeem an authorization code with your Open ID provider.");
     }
 }
+
+sub throw_error {
+    my $message = shift;
+    $message .= " We can't sign you in at this time. If this problem persists, please contact your IT administrator.";
+    throw Foswiki::OopsException('oopsattention', def => 'generic', params => [ $message ]);
+}
+    
 
 sub extract_id_token {
     my $bearer_token_data = JSON::decode_json(shift);
@@ -115,8 +129,11 @@ sub verify_id_token {
     my $issuer = shift;
     
     my @parts = split(/\./, $id_token);
-    die "JWT ID token verification failed: wrong number of segments" unless scalar @parts == 3;
-
+    if (scalar @parts != 3) {
+	Foswiki::Func::writeDebug("OpenIDLoginContrib: JWT ID token verification failed: wrong number of segments");
+	throw_error("We received a badly formatted answer from your Open ID provider.");
+    }
+    
     my $header = JSON::decode_json(MIME::Base64::decode($parts[0]));
     my $kid = $header->{'kid'};
     my $data = '';
@@ -129,16 +146,25 @@ sub verify_id_token {
 		$data = Crypt::JWT::decode_jwt(token=>$id_token, key=>$key);
 	    };
 	    if ($@) {
-		die "JWT ID token verification failed: " . $@;
+		Foswiki::Func::writeDebug("OpenIDLoginContrib: JWT ID token verification failed: " . $@);
+		throw_error("We couldn't verify the validity of the claims we received from your Open ID provider.");
 	    };
-	    die "JWT ID token verification failed: wrong audience" unless $audience eq $data->{'aud'};
-	    die "JWT ID token verification failed: wrong issuer (" . $data->{'iss'} . ")" unless $data->{'iss'} =~ /$issuer/;
+	    if ($audience ne $data->{'aud'}) {
+		Foswiki::Func::writeDebug("OpenIDLoginContrib: JWT ID token verification failed: wrong audience");
+		throw_error("We couldn't verify the validity of the claims we received from your Open ID provider.");
+	    }
+	    if ($data->{'iss'} !~ /$issuer/) {
+		Foswiki::Func::writeDebug("OpenIDLoginContrib: JWT ID token verification failed: wrong issuer (" . $data->{'iss'} . ")");
+		throw_error("We couldn't verify the validity of the claims we received from your Open ID provider.");
+	    }
 	    return $data;
 	}
     }
+
     # TODO: This may happen if we cache the keys for long periods (hours) instead of fetching them whenever 
     # we need them. In that case, we could recover by explicitely fetching them and retrying to verify.
-    die "JWT ID token verification failed: unknown signing key";
+    Foswiki::Func::writeDebug("OpenIDLoginContrib: JWT ID token verification failed: unknown signing key");
+    throw_error("We couldn't verify the validity of the claims we received from your Open ID provider.");    
 }    
 
 sub random_bytes {

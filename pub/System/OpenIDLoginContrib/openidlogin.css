@@ -3,10 +3,13 @@ a.openidbutton {
     float: left;
     width: 84px;
     margin-right: 25px;
+    color: 555;
+    text-decoration: none;
 }
 
 a.openidbutton:hover {
     color: #555;
+    text-decoration: underline;
 }
 
 a.openidbutton img {
@@ -29,17 +32,30 @@ a.openidbutton span {
 
 
 a.provider_Google img  {
-    background-color: red;
+    background-color: #dd0000;
+}
+
+a.provider_Google img:hover {
+    background-color: #ff0000;
 }
 
 a.provider_Microsoft img {
     background-color: #0dadea;
 }
 
+a.provider_Microsoft img:hover {
+    background-color: #1dbdfa;
+}
+
 p.clear {
     clear: both;
     padding-top: 15px;
+    visibility: visible;
 }
+
+.natLogin p.openid_accounts {
+    padding-top: 35px;
+}    
 
 .native_credentials {
     display: none;

@@ -56,6 +56,12 @@ sub new {
   return $this;
 }
 
+=pod
+---++ ObjectMethod loadProviderData($provider) 
+Given a provider key which must reference a key in the Foswiki configuration 
+under Extensions->OpenID, loads relevant provider information into object
+properties.
+=cut 
 sub loadProviderData {
     my $this = shift;
     my $provider = shift;
@@ -72,6 +78,20 @@ sub loadProviderData {
 }
 
 
+sub getAndClearSessionValue {
+    my $this = shift;
+    my $key = shift;
+    my $value = Foswiki::Func::getSessionValue($key);    
+    Foswiki::Func::clearSessionValue($key);
+    return $value;
+}
+
+
+=pod
+---++ ObjectMethod serializedState() -> $encoded_state
+This returns the url-encoded state, which currently only consists of a 
+random nonce value. If no state exists, a random value is generated.
+=cut
 sub serializedState {
     my $this = shift;
     if (!defined($this->{state})) {
@@ -82,6 +102,11 @@ sub serializedState {
     return $this->{state};
 }
 
+=pod
+---++ ObjectMethod extractEmail($id_token) -> $email
+Given a id token, tries to find an e-mail claim and returns
+it. Currently this is rather dumb; it should be made more intelligent.
+=cut
 sub extractEmail {
     my $this = shift;
     my $id_token = shift;
@@ -92,6 +117,12 @@ sub extractEmail {
     return undef;
 }
 
+=pod
+---++ ObjectMethod extractLoginname($id_token) -> $loginname
+This extracts a Foswiki loginname from a id token. Which claim
+is used as the login name ultimately depends on the attribute configured
+in Foswiki::cfg.
+=cut
 sub extractLoginname {
     my $this = shift;
     my $id_token = shift;
@@ -103,6 +134,15 @@ sub extractLoginname {
     return $login;
 }
 
+=pod
+---++ ObjectMethod buildWikiName(id_token) => $wikiname
+Given a id token, builds a wikiname from it. Which claims are used to
+build the wikiname ultimately depends on the Foswiki::cfg settings.
+
+If the wikiname that's built ends in ...Group or is contained in 
+the list of forbidden WikiNames, WikiGuest (or rather, the configured
+default WikiName) is returned instead.
+=cut
 sub buildWikiName {
     my $this = shift;
     my $idtoken = shift;
@@ -128,6 +168,16 @@ sub buildWikiName {
     return $wikiname;
 }
 
+=pod
+---++ ObjectMethod matchWikiUser($wikiname, $email) => $wikiname
+This checks whether the e-mail address stored in a WikiName topic's
+form field matches the $email argument. If it does, then the name
+of the topic (e.g. the $wikiname) is returned. If it doesn't, 
+undef is returned.
+
+The wikiname is also returned when the WikiName topic doesn't exist
+or pre-assigning wikinames is disabled in the configuration. 
+=cut   
 sub matchWikiUser {
     my $this = shift;
     my $wikiname = shift;
@@ -160,6 +210,15 @@ sub matchWikiUser {
     return undef;
 }
 
+=pod
+---++ ObjectMethod _isAlreadyMapped($session, $loginname, $email, $wikiname) => $boolean
+
+This is an internal helper function which tries to determine whether a given loginname
+is already mapped to a wikiname or not.
+
+Unfortunately, there doesn't seem to be a "right" way to determine this while staying
+inside the constraints of the public API. 
+=cut
 sub _isAlreadyMapped {
     my $this = shift;
     my $session = shift;
@@ -176,14 +235,28 @@ sub _isAlreadyMapped {
 	my $aWikiname = Foswiki::Func::userToWikiName($loginname, 1);
 	$is_mapped = $aWikiname ne $loginname;
     } else {
-	# If login names are turned off, both true and false would make
-	# sense, but we return 0 so that on-the-spot user topic matching
-	# can be done in mapUser.
+	# It's important to return 0 here so that if mapping is turned
+	# off, on-the-spot pre-assignment checking is initiated by mapUser.
+	# If this returned 1, we'd never do any checking.
 	return 0;
     }
 }
    
+=pod
+---++ ObjectMethod mapUser($session, id_token) => $cuid
 
+This handles the mapping of a loginname as extracted from an id token 
+to a WikiName. We don't keep a mapping ourselves; we simply instruct
+the configured UserMapper to create one if it doesn't exist yet. If
+the UserMapper doesn't create a permanent mapping, we'll go through 
+the same motions again when the user authenticates the next time.
+
+Much of the code here is concerned with trying to make sure that
+WikiNames which were pre-assigned aren't used in a mapping by
+mistake before the actual user authenticates and claims the WikiName.
+We also handle duplicate names by increasing a counter to generate
+WikiName2, WikiName3, WikiName4 etc.
+=cut
 sub mapUser {
     my $this = shift;
     my $session = shift;
@@ -195,9 +268,9 @@ sub mapUser {
     if ($Foswiki::cfg{Register}{AllowLoginName}) {
 	$loginname = $this->extractLoginname($id_token);
     }
+    # SMELL: Turning off AllowLoginName for Open ID is a really bad idea. Should
+    # we complain, or add a warning to the log?
     else {
-	# SMELL: Turning off AllowLoginName for Open ID is a really bad idea. Should
-	# we complain, or add a warning to the log?
 	$loginname = $candidate;
     }
     my $email = lc($this->extractEmail($id_token));
@@ -224,6 +297,13 @@ sub mapUser {
     }
 }
 
+=pod
+---++ ObjectMethod redirectToProvider($provider, $query, $session)
+
+This is called directly by login() and is responsible for building
+the redirect url to the Open ID provider. It generates the redirect
+and sends it back to the user agent.
+=cut
 sub redirectToProvider {
     my $this = shift;
     my $provider = shift;
@@ -255,6 +335,13 @@ sub redirectToProvider {
     $response->redirect($request_uri);
 }
 
+=pod
+---++ ObjectMethod oauthCallback($code, $state, $query, $session)
+
+This is called directly by login() when login() detects a successful
+callback from the Open ID provider. When we get here, we have an
+authorization code and state and can now exchange it for an id token.
+=cut
 sub oauthCallback {
     my $this = shift;
     my $code = shift;
@@ -267,16 +354,11 @@ sub oauthCallback {
     $state = Foswiki::urlDecode($state);
     $code = Foswiki::urlDecode($code);
 
-    my $stored_state = Foswiki::Func::getSessionValue('openid_state');
-    my $provider = Foswiki::Func::getSessionValue('openid_provider');
-    my $origin = Foswiki::Func::getSessionValue('openid_origin');
-    my $web = Foswiki::Func::getSessionValue('openid_web');
-    my $topic = Foswiki::Func::getSessionValue('openid_topic');
-    Foswiki::Func::clearSessionValue('openid_state');
-    Foswiki::Func::clearSessionValue('openid_provider');
-    Foswiki::Func::clearSessionValue('openid_origin');
-    Foswiki::Func::clearSessionValue('openid_web');
-    Foswiki::Func::clearSessionValue('openid_topic');
+    my $stored_state = $this->getAndClearSessionValue('openid_state');
+    my $provider = $this->getAndClearSessionValue('openid_provider');
+    my $origin = $this->getAndClearSessionValue('openid_origin');
+    my $web = $this->getAndClearSessionValue('openid_web');
+    my $topic = $this->getAndClearSessionValue('openid_topic');    
     die "OpenIDLoginContrib detected state mismatch ('$stored_state' vs '$state') - attack in progress?" unless ($stored_state eq $state);
     $this->{state} = $state;
 
@@ -331,6 +413,17 @@ sub oauthCallback {
     return;
 }
 
+=pod
+---++ ObjectMethod displayLoginTemplate($query, $session) 
+
+Called by login() when it doesn't know what else to do. This
+displays the openid login template, which is currently hardcoded,
+so it can't be overwritten or reconfigured by a UserMapper.
+
+Fair amounts of code are copied from the TemplateLogin login()
+method. Code readability would profit from refactoring TemplateLogin
+a bit...
+=cut
 sub displayLoginTemplate {
     my $this = shift;
     my $query = shift;
@@ -348,7 +441,6 @@ sub displayLoginTemplate {
     my $note   = '';
     my $topic  = $session->{topicName};
     my $web    = $session->{webName};
-
 
     # Truncate the path_info at the first quote
     my $path_info = $query->path_info();
@@ -383,7 +475,33 @@ sub displayLoginTemplate {
     $session->writeCompletePage($tmpl);
 }
 
+sub displayError {
+    my $this = shift;
+    my $query = shift;
+    my $session = shift;
 
+
+    throw Foswiki::OopsException( 'oopsattention', def => 'generic',
+				  params => [ "something horrible happened"  ] );
+}
+
+=pod
+---++ ObjectMethod login($query, $session) 
+The login method now acts as a switchboard. There are basically
+two different uses of the login method.
+
+First, it is used by the user agent to get a login page. We
+detect this case by looking for the absence of all parameters
+or for a provider=native parameter. The native provider is used
+to display the original TemplateLogin page; in that case, this 
+login() method simply hands the query and session on to it's parent.
+
+Second, it is used as a callback url by an Open ID provider. We
+detect this case by looking for state, code or error parameters.
+
+There is one more case: When the provider parameter
+is provided, we do an oauth redirect to the given provider. 
+=cut    
 sub login {
     my ( $this, $query, $session ) = @_;
 
@@ -391,15 +509,8 @@ sub login {
     my $state = $query->param('state');
     my $code = $query->param('code');
     my $password = $query->param('password');
+    my $error = $query->param('error');
     
-    # The login method now acts as a switchboard. When the provider
-    # parameter is provided, we do an oauth redirect to the given
-    # provider. When we get state and code parameters, we're running
-    # the callback handler. If we don't get any parameters, we
-    # display the login template to allow the user to pick a provider.
-    # The 'native' provider value is there for graceful degradation
-    # - it provides explicit access to the original behaviour of the
-    # TemplateLogin.
     
     if ((defined $provider) && ($provider ne 'native')) {
 	$this->redirectToProvider($provider, $query, $session);
@@ -412,6 +523,9 @@ sub login {
 	# if we get a password or a request for the native login 
 	# provider, we redirect to the original TemplateLogin
 	$this->SUPER::login($query, $session);
+    }
+    elsif (defined($error)) {
+	$this->displayError($query, $session);
     }
     else {
 	$this->displayLoginTemplate($query, $session);
